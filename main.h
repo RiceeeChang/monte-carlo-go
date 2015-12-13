@@ -8,7 +8,7 @@
 
 using namespace std;
 
-#define MAX 32100
+
 
 #include "board.h"
 #include "monte_carlo.h"

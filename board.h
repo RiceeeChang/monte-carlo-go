@@ -2,6 +2,7 @@
 #define _BOARD_H_
 #include <cstdlib>
 
+#define MAX 32100
 // Size parameters for a 9x9 board
 #define SIZE          9
 #define BOARD_SIZE    111 // (SIZE+2)*(SIZE+1)+1

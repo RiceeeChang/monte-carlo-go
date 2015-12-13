@@ -2,86 +2,102 @@
 #include <cstdio> 
 double ucb_constant = 0.1;
 
-Node::Node(Node* _parent, int _player, int _is_opponent, int _move){
+Node::Node(Node* _parent, int _player, int _turn, int _move, double _win_rate){
     parent = _parent;
     player = _player;
-    opponent = !player;
-    is_opponent = _is_opponent;
+    turn = _turn;
+    is_opponent = (player != turn);
     move = _move;
+    win_rate = _win_rate;
 }
 
-void Node::update(){
-    double max = -1;
-    max_child = 0;
-    //printf("update\nchild_number= %d\n", num_child);
-    // count win_rate
-    for(int i=0; i<num_child; i++){
-        
 
-        wins += child[i]-> wins;
-        playouts += child[i]-> playouts;
-        child[i]->win_rate = child[i]->wins/child[i]->playouts;
-
-        if((child[i]->win_rate > max)^(is_opponent)){
-            max = child[i]->win_rate;
-            max_child = i;
-        }
-        //printf("i=%d, child=%p, move=%d, wins= %f, playouts=%f\n", 
-        //    i, child[i], child[i]->move, child[i]->wins, child[i]->playouts);
-        //printf("win_rate=%f, max=%f, max_child=%d\n", child[i]->win_rate, max, max_child);
+Node* selection(Node* node, Board* board){
+    while(node->num_child != 0){
+        do_move(board, node->turn, node->move);
+        node = node->max_child;
     }
-    // count ucb
-    max = -1;
-    ucb_max_child = 0;
-    for(int i=0; i<num_child; i++){
-        if(is_opponent)
-            child[i]->ucb = child[i]->win_rate + 
-            ucb_constant*sqrt(log(playouts)/child[i]->playouts);
-        else
-            child[i]->ucb = (1-child[i]->win_rate) + 
-            ucb_constant*sqrt(log(playouts)/child[i]->playouts);
-        if((child[i]->ucb > max)^(is_opponent)){
-            max = child[i]->ucb;
-            ucb_max_child = i;
-        }
-    }
+    return node;
 }
 
-Node* selection(Node* root, Board* board){
-    while(root->num_child != 0){
-        do_move(board, root->opponent, root->move);
-        root = root->child[root->max_child];
-    }
-    return root;
-}
+Node* expansion(Node* node, Board* board){
+    if(!node->simulated)
+        return node;
 
-void expansion(Node* root, Board* board){
     int MoveList[BOARD_SIZE];
-    int num_legal_moves = gen_legal_move(board, root->player, MoveList);
+    int num_legal_moves = gen_legal_move(board, node->player, MoveList);
+    double default_win_rate = 1.1;
+    for(int i=0; i<num_legal_moves; i++)
+        node->child[node->num_child++] = new Node(node, node->player, 
+                                            !node->turn, MoveList[i], 
+                                            default_win_rate);
+    node->max_child = node->child[0];
+    return node->max_child;
 
-    int opponent = !(root->player);
-    for(int i=0; i<num_legal_moves; i++){
-        Node* child = new Node(root, opponent, !(root->is_opponent), MoveList[i]);
-        root->child[root->num_child++] = child;
-    }
 }
 
-void simulation(Node* root, Board* board, int player, int _times){
+void simulation(Node* node, Board* board, int player, int _times){
+    node->simulated = 1;
+
     for(int times=0; times<_times; times++){
-        for(int i=0; i<root->num_child; i++){
-            Node* child = root->child[i];
-            if(quick_move(board, child->player, child->move)
-               ^ root->is_opponent){
-                child->wins++;
-            }
-            (child->playouts)++;
-        }    
+        if(quick_move(board, node->player, node->move)
+           ^ node->player==node->turn){
+            node->wins++;
+        }
+        (node->playouts)++;
     }
 }
 
-void propagation(Node* root){
-    while(root != NULL){
-        root->update();
-        root = root->parent;
-    } 
+void propagation(Node* node){
+    
+    Node* parent = node->parent;
+    Node* child = node;
+    while(parent != NULL){
+        //node->update();
+        parent->wins     += node->wins;
+        parent->playouts += node->playouts;
+        parent->win_rate = parent->wins/parent->playouts;
+
+        // count win_rate for mcst_pure
+        child->win_rate = child->wins/child->playouts;
+        if(child == parent->max_child){
+            double max = -MAX;
+            int count = 0;
+            for(int i=0; i<parent->num_child; i++){
+                if(parent->child[i]->win_rate > 1){
+                    parent->max_child = parent->child[i];
+                    break;
+                }
+                if(parent->child[i]->win_rate > max){
+                    max = parent->child[i]->win_rate;
+                    parent->max_child = parent->child[i];
+                }
+            }
+        }else{
+            if(child->win_rate >parent->max_child->win_rate)
+                parent->max_child = child;
+        }
+        // count ucb
+        double ucb_second = ucb_constant*sqrt(log(parent->playouts)/child->playouts);
+        if(child->player == child->turn)
+            child->ucb = child->win_rate + ucb_second;
+        else
+            child->ucb = (1-child->win_rate) + ucb_second;
+        if(child == parent->ucb_max_child){
+            int max = -MAX;
+            for(int i=0; i<parent->num_child; i++){
+                if(parent->child[i]->ucb = MAX){
+                    parent->ucb_max_child = parent->child[i];
+                    break;
+                }
+                if(parent->child[i]->ucb > -MAX){
+                    max = parent->child[i]->ucb;
+                    parent->ucb_max_child = parent->child[i];
+                }
+            }
+        }
+
+        child = parent;
+        parent = parent->parent;
+    }
 }
